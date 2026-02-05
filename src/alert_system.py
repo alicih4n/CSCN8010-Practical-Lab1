@@ -149,3 +149,8 @@ class AlertSystem:
         except Exception as e:
             print(f"Failed to log event: {e}")
 
+    def run_simulation(self, stream_data):
+        print("Running simulation...")
+        for row in stream_data:
+            self.check_stream(row)
+        print("Simulation complete.")

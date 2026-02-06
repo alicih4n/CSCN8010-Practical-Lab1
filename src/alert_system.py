@@ -61,7 +61,7 @@ class AlertSystem:
         intercept = self.models[axis]['intercept']
         return slope * time_seconds + intercept
 
-    def check_stream(self, row):
+    def check_stream(self, row, verbose=False):
         """
         row: dict or series containing 'time', 'seconds_from_start', 'axis_1'...'axis_8'
         """
@@ -94,6 +94,8 @@ class AlertSystem:
             
             # State Management
             state_key = axis
+            status_msg = "Normal"
+            duration = 0.0
             
             if violation_type:
                 if state_key not in self.active_violations:
@@ -103,16 +105,19 @@ class AlertSystem:
                         'type': violation_type,
                         'max_severity': violation_type # Track if it escalated to ERROR
                     }
+                    status_msg = f"{violation_type} Started"
                 else:
                     # Ongoing violation
                     start_time = self.active_violations[state_key]['start_time']
                     duration = (current_time - start_time).total_seconds()
+                    status_msg = f"{violation_type} Ongoing ({duration:.1f}s)"
                     
                     # Update severity if escalated
                     if violation_type == 'ERROR':
                         self.active_violations[state_key]['max_severity'] = 'ERROR'
                     
                     if duration >= self.T_seconds:
+                        status_msg = f"{violation_type} PERSISTED > {self.T_seconds}s -> LOG EVENT"
                         if not self.active_violations[state_key].get('alerted'):
                             severity = self.active_violations[state_key]['max_severity']
                             msg = f"{severity} detected on {axis}. Variance {abs_res:.2f} > Threshold for {duration:.1f}s"
@@ -122,7 +127,11 @@ class AlertSystem:
             else:
                 # Violation ended
                 if state_key in self.active_violations:
+                    status_msg = "Violation Ended"
                     del self.active_violations[state_key]
+            
+            if verbose and (violation_type or status_msg != "Normal"):
+                print(f"[{current_time.time()}] {axis}: Val={observed:.2f} | Res={abs_res:.2f} | {status_msg}")
 
     def log_event(self, event_type, axis, start_time, end_time, duration, message):
         # Store internally for plotting
@@ -153,12 +162,12 @@ class AlertSystem:
         except Exception as e:
             print(f"Failed to log event: {e}")
 
-    def run_simulation(self, stream_data):
+    def run_simulation(self, stream_data, verbose=False):
         print("Running simulation...")
         self.history = [] # Reset history
         self.events = []  # Reset events
         for row in stream_data:
-            self.check_stream(row)
+            self.check_stream(row, verbose=verbose)
         print("Simulation complete.")
 
     def plot_results(self):
